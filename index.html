@@ -108,6 +108,9 @@ aside{display:flex;flex-direction:column;gap:16px;min-width:0}
 .card{background:var(--card);color:var(--card-ink);border:3px solid var(--card-ink);border-radius:14px;overflow:hidden;box-shadow:6px 6px 0 var(--edge);--rc:var(--r-common)}
 .card.draw{animation:flip .55s cubic-bezier(.2,1.4,.4,1) both}
 @keyframes flip{from{transform:rotateY(90deg) translateY(-20px) scale(.85)}to{transform:none}}
+.card.none{background:transparent;color:var(--muted);border:3px dashed #4a4277;box-shadow:none}
+.card.none .art{height:72px;font-family:var(--f-display);font-size:44px;color:#4a4277;background:none;border-bottom:3px dashed #4a4277}
+.card.none p{color:var(--muted)}
 .card.r-rare{--rc:var(--r-rare)} .card.r-legend{--rc:var(--r-legend)} .card.r-dud{--rc:var(--r-dud)}
 .card.r-legend{border-color:#8a5a00;box-shadow:6px 6px 0 var(--edge),0 0 26px rgba(255,182,39,.45)}
 .card .band{display:flex;justify-content:space-between;align-items:center;background:var(--rc);color:#fff;padding:5px 12px;font-size:12px;font-weight:700;letter-spacing:.12em}
@@ -145,7 +148,7 @@ aside{display:flex;flex-direction:column;gap:16px;min-width:0}
 <header>
   <div>
     <h1 aria-label="카오스 체스"><span>카</span><span>오</span><span>스</span><span>체스</span></h1>
-    <p class="tag">내 차례마다 카드 한 장. 규칙은 형식상 존재합니다. 상대 킹을 전부 잡으면 승리.</p>
+    <p class="tag">아무 때나 카드가 날아온다. 규칙은 형식상 존재합니다. 상대 킹을 전부 잡으면 승리.</p>
   </div>
   <div class="modes" role="group" aria-label="게임 모드">
     <button class="chip" id="m-ai" data-mode="ai">컴퓨터와 대결</button>
@@ -420,10 +423,19 @@ function newGame(mode){
   log('게임 시작! 규칙은 형식상 존재합니다.','sys');
   startTurn();
 }
+// 카드는 매 턴이 아니라 가끔 온다. 너무 오래 안 오면 다음 턴엔 반드시 온다.
+const CARD_CHANCE=.3, MAX_DRY=4;
 function startTurn(){
-  S.phase='reveal';S.movesLeft=1;S.sel=null;S.picks=[];S.stepIdx=0;
-  S.card=drawCard();S.drawId++;(S.lastDrawn||(S.lastDrawn={}))[S.turn]=S.card;
-  log(`「${CARD[S.card].name}」 카드를 뽑았다`);
+  S.phase='reveal';S.movesLeft=1;S.sel=null;S.picks=[];S.stepIdx=0;S.drawId++;
+  const dry=S.dry||(S.dry={w:0,b:0});
+  if(Math.random()>=CARD_CHANCE&&dry[S.turn]<MAX_DRY){
+    dry[S.turn]++;S.card=null;S.phase='move';render();
+    if(isAI()) aiMove();
+    return;
+  }
+  dry[S.turn]=0;
+  S.card=drawCard();(S.lastDrawn||(S.lastDrawn={}))[S.turn]=S.card;
+  log(`🃏 카드가 날아왔다! 「${CARD[S.card].name}」`);
   render();
   if(isAI()) aiCard();
 }
@@ -592,6 +604,8 @@ function render(){
   const who=ai?(S.turn==='w'?'나 (백)':'컴퓨터 (흑)'):`${SIDE[S.turn]}의 차례`;
   $('turn').innerHTML=`<span class="dot ${S.turn}"></span><span class="who">${who}</span><span class="no">TURN ${S.turnNo}</span>${check.size?'<span class="alert">킹이 노려지고 있다!</span>':''}`;
 
+  if(shownDraw!==S.drawId&&!S.card){shownDraw=S.drawId;
+    $('slot').innerHTML=`<article class="card none"><div class="art" aria-hidden="true">?</div><div class="body"><h2>카드 없음</h2><p>이번 턴엔 카드가 오지 않았다. 평범한 체스를 두자. 다음 턴엔 뭐가 올지 아무도 모른다.</p></div></article>`}
   if(shownDraw!==S.drawId){shownDraw=S.drawId;const cd=CARD[S.card];
     $('slot').innerHTML=`<article class="card draw r-${cd.r}"><div class="band"><span>${RAR[cd.r].label}</span><span>${SIDE[S.turn]}의 카드</span></div><div class="art" aria-hidden="true">${cd.icon}</div><div class="body"><h2>${cd.name}</h2><p>${cd.desc}</p><span class="kind">${cd.kind==='instant'?'즉시 발동 · 거부 불가':'대상 지정 · 버릴 수 있음'}</span></div></article>`}
 
