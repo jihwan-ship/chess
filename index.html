@@ -1,0 +1,628 @@
+<title>카오스 체스</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;600;700&family=Noto+Sans+Symbols+2&display=swap">
+<style>
+/* Layout: the board is the table, a tall card-and-log column sits to its right; stacks on phones.
+   One committed look: a late-night game table in ink-indigo, cream cards, marigold and hot pink for chaos. */
+:root{
+  --table:#1f1a38; --table-2:#2a2449; --edge:#120f22;
+  --ink:#f3ebda; --muted:#a59dc4;
+  --sq-light:#eadfc4; --sq-dark:#8b9c75;
+  --gold:#ffb627; --hot:#ef4f7f; --ice:#86d6ff;
+  --card:#fbf3e2; --card-ink:#1d1830; --card-muted:#5d5576;
+  --r-common:#7d9168; --r-rare:#3f86f0; --r-legend:#f0a316; --r-dud:#b19e84;
+  --f-display:"Black Han Sans","IBM Plex Sans KR","Malgun Gothic",sans-serif;
+  --f-body:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+  --f-piece:"Noto Sans Symbols 2","Segoe UI Symbol","DejaVu Sans",serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{
+  background:var(--table);
+  background-image:radial-gradient(circle at 20% 0%, var(--table-2), transparent 60%),radial-gradient(circle at 100% 100%, #2b1f45, transparent 50%);
+  color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.55;
+  padding-block:20px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+header{max-width:1040px;margin:0 auto 18px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(34px,6vw,54px);line-height:1;margin:0;letter-spacing:.01em;text-wrap:balance}
+h1 span{display:inline-block}
+h1 span:nth-child(1){transform:rotate(-6deg);color:var(--gold)}
+h1 span:nth-child(2){transform:rotate(4deg) translateY(3px);color:var(--hot)}
+h1 span:nth-child(3){transform:rotate(-2deg);color:var(--gold)}
+h1 span:nth-child(4){transform:rotate(3deg) translateY(-2px);color:var(--ink);margin-left:.22em}
+.tag{margin:6px 0 0;color:var(--muted);font-size:14px}
+.modes{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:2px solid var(--muted);background:transparent;border-radius:999px;padding:6px 14px;cursor:pointer;font-weight:600;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--card-ink);border-color:var(--ink)}
+.chip.new{border-color:var(--gold);color:var(--gold)}
+
+.app{max-width:1040px;margin:0 auto;display:grid;grid-template-columns:minmax(0,620px) minmax(0,380px);gap:26px;justify-content:center;align-items:start}
+@media (max-width:920px){.app{grid-template-columns:minmax(0,1fr)} .board-wrap{max-width:600px;margin:0 auto}}
+
+.board-wrap{position:relative;width:100%;container-type:inline-size}
+.board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;width:100%;max-width:100%;border:6px solid var(--edge);border-radius:8px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.45),0 0 0 2px #3b3362}
+.sq{position:relative;border:0;padding:0;margin:0;display:grid;place-items:center;cursor:pointer;aspect-ratio:1;min-width:0}
+.sq.l{background:var(--sq-light)} .sq.d{background:var(--sq-dark)}
+.sq.last.l{background:#f2d98a} .sq.last.d{background:#c3ad5c}
+.sq.sel{box-shadow:inset 0 0 0 4px var(--hot)}
+.sq.mv::after{content:"";position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(29,24,48,.38);pointer-events:none}
+.sq.cap::after{content:"";position:absolute;inset:6%;border-radius:50%;border:5px solid rgba(239,79,127,.75);pointer-events:none}
+.sq.cand{box-shadow:inset 0 0 0 4px var(--gold);animation:pulse 1s ease-in-out infinite}
+.sq.picked{box-shadow:inset 0 0 0 5px var(--hot)}
+.sq.check{background:radial-gradient(circle, #ff6a6a 0%, #c9384e 70%)}
+@keyframes pulse{50%{box-shadow:inset 0 0 0 7px var(--gold)}}
+.coord{position:absolute;font-size:calc(100cqi/8*.16);font-weight:700;line-height:1;pointer-events:none;color:var(--card-ink);opacity:.55}
+.coord.rk{top:4%;left:5%} .coord.fl{bottom:4%;right:6%}
+.mine{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.mine::before{content:"";width:34%;height:34%;border-radius:50%;background:repeating-conic-gradient(#d33 0 25%, #2b2340 0 50%);opacity:.8;box-shadow:0 0 0 2px #2b2340}
+.pc{font-family:var(--f-piece);font-size:calc(100cqi/8*.74);line-height:1;pointer-events:none;position:relative;z-index:1;paint-order:stroke fill;user-select:none}
+.pc.w{color:#fffaf0;-webkit-text-stroke:2px #1d1830;filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+.pc.b{color:#231c3e;-webkit-text-stroke:1px #fff7;filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+.pc.emo{font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;font-size:calc(100cqi/8*.6);-webkit-text-stroke:0}
+.pc.emo.w{filter:drop-shadow(0 0 0 #fff) drop-shadow(0 0 3px #fff)}
+.pc.emo.b{filter:drop-shadow(0 0 3px #000) hue-rotate(200deg)}
+.pc.invis{opacity:0}
+.pc.ghost{opacity:.55}
+.pc.sword{filter:drop-shadow(0 0 6px var(--gold)) drop-shadow(0 0 2px var(--gold))}
+.pc.frozen{filter:drop-shadow(0 0 5px var(--ice)) saturate(.4)}
+.sq.fz::before{content:"";position:absolute;inset:0;background:linear-gradient(135deg, rgba(134,214,255,.55), rgba(255,255,255,.2));pointer-events:none}
+.badges{position:absolute;top:2%;right:3%;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:1px;max-width:70%;font-size:calc(100cqi/8*.2);line-height:1;z-index:2;pointer-events:none}
+.badges b{font-weight:700;font-size:.9em;color:var(--card-ink);background:#fffc;border-radius:4px;padding:0 2px}
+.fx{position:absolute;inset:0;pointer-events:none;z-index:3}
+.fx.boom,.fx.meteor{background:radial-gradient(circle,#fff6 0,#ffb627 25%,#ef4f7f 50%,transparent 70%);animation:boom .7s ease-out forwards}
+.fx.meteor{background:radial-gradient(circle,#fff 0,#ff8a3d 30%,#5a2d1a 60%,transparent 72%)}
+.fx.hit{background:radial-gradient(circle,#fff9 0,transparent 65%);animation:boom .5s ease-out forwards}
+.fx.slash{background:linear-gradient(135deg,transparent 42%,#fff 48%,var(--gold) 52%,transparent 58%);animation:slash .5s ease-out forwards}
+.fx.poof{background:radial-gradient(circle,#ccc8 0,#8888 40%,transparent 70%);animation:boom .7s ease-out forwards}
+.fx.glow{background:radial-gradient(circle,var(--gold) 0,transparent 70%);animation:boom .9s ease-out forwards}
+.fx.block{box-shadow:inset 0 0 0 6px var(--ice);animation:fade .7s ease-out forwards}
+.fx.hole{background:radial-gradient(circle,#000 0,#4b2a7a 45%,transparent 70%);animation:hole .7s ease-in forwards}
+.fx.magic{background:radial-gradient(circle,#fff 0,#b58cff 35%,transparent 70%);animation:boom .7s ease-out forwards}
+@keyframes boom{from{transform:scale(.3);opacity:1}to{transform:scale(1.5);opacity:0}}
+@keyframes slash{from{transform:translate(-40%,-40%);opacity:1}to{transform:translate(40%,40%);opacity:0}}
+@keyframes fade{to{opacity:0}}
+@keyframes hole{from{transform:scale(1.4) rotate(0);opacity:1}to{transform:scale(0) rotate(270deg);opacity:.2}}
+.over{position:absolute;inset:6px;display:grid;place-items:center;background:rgba(18,15,34,.72);border-radius:4px;z-index:5;text-align:center}
+.over[hidden]{display:none}
+.over div{display:grid;gap:12px;justify-items:center;padding:16px}
+.over strong{font-family:var(--f-display);font-weight:400;font-size:clamp(34px,10cqi,64px);line-height:1.05;color:var(--gold);text-wrap:balance}
+.over p{margin:0;color:var(--ink);max-width:30ch}
+
+aside{display:flex;flex-direction:column;gap:16px;min-width:0}
+.turn{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.turn .who{font-family:var(--f-display);font-size:30px;line-height:1}
+.dot{width:22px;height:22px;border-radius:50%;border:3px solid var(--edge);flex:none}
+.dot.w{background:#fffaf0} .dot.b{background:#231c3e;border-color:#6d6596}
+.turn .no{color:var(--muted);font-size:13px;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.alert{background:var(--hot);color:#fff;font-weight:700;font-size:13px;border-radius:6px;padding:2px 8px}
+
+.slot{perspective:900px}
+.card{background:var(--card);color:var(--card-ink);border:3px solid var(--card-ink);border-radius:14px;overflow:hidden;box-shadow:6px 6px 0 var(--edge);--rc:var(--r-common)}
+.card.draw{animation:flip .55s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes flip{from{transform:rotateY(90deg) translateY(-20px) scale(.85)}to{transform:none}}
+.card.r-rare{--rc:var(--r-rare)} .card.r-legend{--rc:var(--r-legend)} .card.r-dud{--rc:var(--r-dud)}
+.card.r-legend{border-color:#8a5a00;box-shadow:6px 6px 0 var(--edge),0 0 26px rgba(255,182,39,.45)}
+.card .band{display:flex;justify-content:space-between;align-items:center;background:var(--rc);color:#fff;padding:5px 12px;font-size:12px;font-weight:700;letter-spacing:.12em}
+.card .art{display:grid;place-items:center;height:96px;font-size:58px;background:repeating-linear-gradient(45deg, color-mix(in srgb, var(--rc) 22%, var(--card)) 0 10px, color-mix(in srgb, var(--rc) 12%, var(--card)) 10px 20px);border-bottom:3px solid var(--card-ink)}
+.card .body{padding:12px 14px 14px}
+.card h2{font-family:var(--f-display);font-weight:400;font-size:24px;line-height:1.15;margin:0 0 6px;text-wrap:balance}
+.card p{margin:0;font-size:14px;color:var(--card-muted)}
+.card .kind{display:inline-block;margin-top:10px;font-size:12px;font-weight:700;letter-spacing:.06em;border:2px solid var(--card-ink);border-radius:999px;padding:1px 9px}
+
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{border:3px solid var(--edge);border-radius:10px;padding:9px 18px;font-weight:700;cursor:pointer;background:var(--ink);color:var(--card-ink);box-shadow:3px 3px 0 var(--edge);transition:transform .08s}
+.btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--edge)}
+.btn.go{background:var(--gold)} .btn.hot{background:var(--hot);color:#fff}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--muted);box-shadow:none}
+.prompt{color:var(--ink);font-weight:600}
+.prompt small{display:block;color:var(--muted);font-weight:400}
+.info{background:var(--table-2);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--muted);min-height:44px}
+.info strong{color:var(--ink)}
+
+.log h3,.codex summary{font-size:12px;letter-spacing:.14em;color:var(--muted);margin:0 0 6px;font-weight:700}
+.log ol{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.log li{display:flex;gap:8px;align-items:baseline}
+.log li .t{flex:none;font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;width:3.2em}
+.log li.w .m{color:var(--ink)} .log li.b .m{color:#cfc6ef} .log li.sys .m{color:var(--gold)}
+.codex{border-top:1px solid #3b3362;padding-top:12px}
+.codex summary{cursor:pointer;margin:0}
+.codex .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}
+.mini{background:var(--card);color:var(--card-ink);border-radius:8px;border-left:6px solid var(--rc);padding:7px 9px;font-size:12px;--rc:var(--r-common)}
+.mini.r-rare{--rc:var(--r-rare)} .mini.r-legend{--rc:var(--r-legend)} .mini.r-dud{--rc:var(--r-dud)}
+.mini b{display:block;font-size:13px}
+.mini span{color:var(--card-muted)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header>
+  <div>
+    <h1 aria-label="카오스 체스"><span>카</span><span>오</span><span>스</span><span>체스</span></h1>
+    <p class="tag">내 차례마다 카드 한 장. 규칙은 형식상 존재합니다. 상대 킹을 전부 잡으면 승리.</p>
+  </div>
+  <div class="modes" role="group" aria-label="게임 모드">
+    <button class="chip" id="m-ai" data-mode="ai">컴퓨터와 대결</button>
+    <button class="chip" id="m-pvp" data-mode="pvp">둘이서 한 화면</button>
+    <button class="chip new" id="m-new">새 게임</button>
+  </div>
+</header>
+
+<main class="app">
+  <div class="board-wrap">
+    <div class="board" id="board" role="grid" aria-label="체스판"></div>
+    <div class="over" id="over" hidden></div>
+  </div>
+  <aside>
+    <div class="turn" id="turn"></div>
+    <div class="slot" id="slot"></div>
+    <div class="actions" id="actions"></div>
+    <div class="info" id="info"></div>
+    <section class="log"><h3>카오스 기록</h3><ol id="log"></ol></section>
+    <details class="codex"><summary id="codexSum">카드 도감</summary><div class="grid" id="codex"></div></details>
+  </aside>
+</main>
+
+<script>
+const FILES='abcdefgh';
+const VAL={K:1000,Q:9,D:11,R:5,B:3,N:3,P:1,C:2};
+const GLYPH={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',D:'🐉',C:'🐔'};
+const NAME={K:'킹',Q:'퀸',R:'룩',B:'비숍',N:'나이트',P:'폰',D:'드래곤',C:'닭'};
+const EMO=new Set(['D','C']);
+const SIDE={w:'백',b:'흑'};
+const DIAG=[[1,1],[1,-1],[-1,1],[-1,-1]], ORTH=[[1,0],[-1,0],[0,1],[0,-1]], ALL8=DIAG.concat(ORTH);
+const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+const RAR={common:{label:'일반',w:8},rare:{label:'희귀',w:4},legend:{label:'전설',w:3},dud:{label:'꽝',w:5}};
+const CAUSE={capture:'공격',slash:'검기',blast:'폭발',meteor:'운석',mine:'지뢰',snipe:'저격'};
+
+let S, uid=1;
+const inB=(r,c)=>r>=0&&r<8&&c>=0&&c<8;
+const at=(r,c)=>S.board[r][c];
+const foe=c=>c==='w'?'b':'w';
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const sq=(r,c)=>FILES[c]+(8-r);
+const pn=p=>`${SIDE[p.c]} ${NAME[p.t]}`;
+const lastRow=c=>c==='w'?0:7;
+function mk(t,c){return {t,c,id:uid++,moved:false,b:{}}}
+function all(pred){const o=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(pred(S.board[r][c],r,c))o.push([r,c])}return o}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function emptyAround(r,c){return ALL8.map(([dr,dc])=>[r+dr,c+dc]).filter(([rr,cc])=>inB(rr,cc)&&!at(rr,cc))}
+function log(msg,who){S.log.unshift({n:S.turnNo,c:who||S.turn,msg});if(S.log.length>80)S.log.length=80}
+function fx(r,c,k){S.fx.push({r,c,k,t:Date.now()})}
+function move(fr,fc,tr,tc){const p=at(fr,fc);S.board[tr][tc]=p;S.board[fr][fc]=null;p.moved=true;return p}
+function promoteIfEnd(r,c){const p=at(r,c);if(p&&p.t==='P'&&r===lastRow(p.c)){p.t='Q';log(`${SIDE[p.c]} 폰이 끝 줄에 도착해 퀸으로 승진!`)}}
+
+// ---------- destruction ----------
+function destroy(r,c,cause){
+  const p=at(r,c); if(!p) return false;
+  if(p.b.shield>0){log(`🛡️ ${pn(p)}의 방패가 ${CAUSE[cause]}을(를) 막아냈다`);fx(r,c,'block');return false}
+  S.board[r][c]=null;
+  if(p.t!=='K')(S.grave||(S.grave=[])).push({t:p.t,c:p.c});
+  fx(r,c,cause==='slash'?'slash':cause==='capture'?'hit':cause==='meteor'?'meteor':'boom');
+  if(cause!=='capture') log(`${pn(p)} (${sq(r,c)}) 소멸 · 원인: ${CAUSE[cause]}`);
+  if(p.t==='K') log(`💀 ${SIDE[p.c]} 킹이 쓰러졌다!`,'sys');
+  if(p.b.bomb){log(`💣 ${pn(p)}의 폭탄 조끼가 터졌다!`);explode(r,c)}
+  return true;
+}
+function explode(r,c){fx(r,c,'boom');for(const [dr,dc] of ALL8){if(inB(r+dr,c+dc))destroy(r+dr,c+dc,'blast')}}
+function stepOnMine(r,c){
+  const i=S.mines.findIndex(([mr,mc])=>mr===r&&mc===c); if(i<0) return;
+  S.mines.splice(i,1); const p=at(r,c); if(!p) return; fx(r,c,'boom');
+  if(p.t==='K'){p.b.frozen=Math.max(p.b.frozen||0,3);log(`⚠️ ${pn(p)}이(가) 지뢰를 밟았다! 발가락 부상으로 2턴 동안 못 움직인다`)}
+  else destroy(r,c,'mine');
+}
+
+// ---------- step filters for targeted cards ----------
+const me=()=>S.turn;
+const own=(r,c)=>{const p=at(r,c);return !!p&&p.c===me()};
+const enemy=(r,c)=>{const p=at(r,c);return !!p&&p.c!==me()};
+const empty=(r,c)=>!at(r,c);
+
+const CARDS=[
+  {id:'sword',r:'legend',w:5,icon:'🗡️',name:'고독한 소드 마스터',kind:'instant',
+   desc:'킹 하나만 남고 아군이 전부 퇴근한다. 대신 그 킹은 소드 마스터가 된다. 퀸처럼 움직이고, 움직일 때마다 주변 8칸의 적을 벤다.',
+   apply(){const kings=all(p=>p&&p.c===me()&&p.t==='K');
+     if(!kings.length){log('소드 마스터가 될 킹이 없다. 카드가 머쓱해한다.');return}
+     const [kr,kc]=kings[0];
+     for(const [r,c] of all(p=>p&&p.c===me())){if(r!==kr||c!==kc){S.board[r][c]=null;fx(r,c,'poof')}}
+     const k=at(kr,kc);k.b.sword=true;k.b.shield=Math.max(k.b.shield||0,2);fx(kr,kc,'glow');
+     log('아군이 모두 짐을 싸서 떠났다. 킹이 조용히 검을 뽑는다.')}},
+  {id:'dragon',r:'legend',icon:'🐉',name:'드래곤 소환',kind:'target',ai:'random',
+   desc:'빈칸 하나에 드래곤을 소환한다. 드래곤은 퀸과 나이트의 움직임을 모두 쓴다.',
+   steps:[{prompt:'드래곤을 소환할 빈칸을 고르세요',ok:(r,c)=>empty(r,c)}],
+   apply([[r,c]]){S.board[r][c]=mk('D',me());fx(r,c,'glow');log(`${sq(r,c)}에 드래곤이 내려앉았다`)}},
+  {id:'shuffle',r:'legend',icon:'🌀',name:'정체성 혼란',kind:'instant',
+   desc:'판 위 모든 기물의 종류가 진영별로 뒤섞인다. 킹도 예외 없다. 어제의 폰이 오늘의 킹이다.',
+   apply(){for(const col of ['w','b']){const sqs=all(p=>p&&p.c===col);const types=shuffle(sqs.map(([r,c])=>at(r,c).t));
+     sqs.forEach(([r,c],i)=>{at(r,c).t=types[i];fx(r,c,'magic')})}
+     log('모두가 자기가 누군지 잊어버렸다')}},
+  {id:'hole',r:'legend',icon:'🕳️',name:'블랙홀',kind:'instant',
+   desc:'판 중앙 4×4 구역의 기물이 절반 확률로 빨려 들어간다. 킹은 너무 무거워서 바깥으로 튕겨 나간다.',
+   apply(){const inZone=(r,c)=>r>=2&&r<=5&&c>=2&&c<=5;let n=0;
+     for(const [r,c] of all((p,r,c)=>p&&inZone(r,c))){const p=at(r,c);
+       if(p.t==='K'){const out=all((q,rr,cc)=>!q&&!inZone(rr,cc));if(out.length){const [tr,tc]=rnd(out);move(r,c,tr,tc);fx(tr,tc,'magic');log(`${pn(p)}이(가) 블랙홀에 튕겨 ${sq(tr,tc)}로 날아갔다`)}}
+       else if(p.b.shield>0){fx(r,c,'block')}
+       else if(Math.random()<.5){S.board[r][c]=null;fx(r,c,'hole');n++}}
+     log(`블랙홀이 기물 ${n}개를 삼켰다`)}},
+
+  {id:'double',r:'rare',icon:'⏩',name:'더블 턴',kind:'instant',desc:'이번 턴에 두 번 움직인다.',
+   apply(){S.movesLeft=2;log('이번 턴은 두 번 움직인다')}},
+  {id:'swap',r:'rare',icon:'🔄',name:'자리 바꾸기',kind:'target',ai:'skip',
+   desc:'아무 기물 두 개를 골라 위치를 맞바꾼다. 적 킹을 내 퀸 앞으로 끌고 와도 된다.',
+   steps:[{prompt:'첫 번째 기물을 고르세요',ok:(r,c)=>!!at(r,c)},{prompt:'맞바꿀 두 번째 기물을 고르세요',ok:(r,c,pk)=>!!at(r,c)&&!(r===pk[0][0]&&c===pk[0][1])}],
+   apply([[a,b],[c,d]]){const p=at(a,b),q=at(c,d);S.board[a][b]=q;S.board[c][d]=p;fx(a,b,'magic');fx(c,d,'magic');log(`${pn(p)} ↔ ${pn(q)} 위치 교환`)}},
+  {id:'clone',r:'rare',icon:'👯',name:'분신술',kind:'target',ai:'high',
+   desc:'내 기물 하나를 골라 옆 빈칸에 똑같은 분신을 만든다. 킹도 된다. 킹이 둘이면 둘 다 잡혀야 진다.',
+   steps:[{prompt:'분신을 만들 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&emptyAround(r,c).length>0}],
+   apply([[r,c]]){const p=at(r,c);const [tr,tc]=rnd(emptyAround(r,c));const q=mk(p.t,p.c);q.b={...p.b};q.moved=true;S.board[tr][tc]=q;fx(tr,tc,'magic');log(`${pn(p)}의 분신이 ${sq(tr,tc)}에 나타났다`)}},
+  {id:'traitor',r:'rare',icon:'🤝',name:'배신',kind:'instant',desc:'적 기물 하나(킹 제외)가 무작위로 내 편이 된다.',
+   apply(){const c=all(p=>p&&p.c!==me()&&p.t!=='K');if(!c.length){log('배신할 적이 없다');return}
+     const [r,cc]=rnd(c);const p=at(r,cc);p.c=me();p.b.frozen=0;fx(r,cc,'magic');log(`${sq(r,cc)}의 ${NAME[p.t]}이(가) ${SIDE[me()]} 편으로 넘어왔다`)}},
+  {id:'meteor',r:'rare',icon:'☄️',name:'운석 낙하',kind:'instant',desc:'무작위 기물 3개 위에 운석이 떨어진다. 피아 구분 없음. 킹은 왕관이 튕겨내서 무사하다.',
+   apply(){const c=shuffle(all(p=>p&&p.t!=='K')).slice(0,3);log('하늘에서 운석 3개가 떨어진다!');for(const [r,cc] of c)if(at(r,cc))destroy(r,cc,'meteor')}},
+  {id:'quake',r:'rare',icon:'🌋',name:'대지진',kind:'instant',desc:'모든 기물이 절반 확률로 옆 빈칸으로 미끄러진다.',
+   apply(){let n=0;for(const [r,c] of shuffle(all(p=>!!p))){if(Math.random()<.5){const e=emptyAround(r,c);if(e.length){const [tr,tc]=rnd(e);move(r,c,tr,tc);n++}}}
+     S.last=null;log(`땅이 흔들려 기물 ${n}개가 미끄러졌다`)}},
+  {id:'flip',r:'rare',icon:'↔️',name:'판 뒤집기',kind:'instant',desc:'판을 좌우로 뒤집는다. 퀸 사이드가 킹 사이드가 된다.',
+   apply(){S.board.forEach(row=>row.reverse());S.mines=S.mines.map(([r,c])=>[r,7-c]);S.last=null;log('누군가 판을 통째로 뒤집었다')}},
+  {id:'bomb',r:'rare',icon:'💣',name:'폭탄 조끼',kind:'target',ai:'high',desc:'내 기물 하나에 폭탄을 입힌다. 잡히면 주변 8칸과 잡은 기물까지 날려버린다.',
+   steps:[{prompt:'폭탄 조끼를 입힐 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&!at(r,c).b.bomb}],
+   apply([[r,c]]){at(r,c).b.bomb=true;fx(r,c,'glow');log(`${pn(at(r,c))}이(가) 폭탄 조끼를 입었다. 건드리지 마시오.`)}},
+  {id:'berserk',r:'rare',icon:'🔥',name:'광전사',kind:'target',ai:'high',desc:'내 기물 하나가 광전사가 된다. 적을 잡을 때마다 한 번 더 움직인다.',
+   steps:[{prompt:'광전사로 만들 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&!at(r,c).b.berserk}],
+   apply([[r,c]]){at(r,c).b.berserk=true;fx(r,c,'glow');log(`${pn(at(r,c))}의 눈이 빨갛게 변했다`)}},
+  {id:'tele',r:'rare',icon:'✨',name:'순간이동',kind:'target',ai:'random',desc:'내 기물 하나를 아무 빈칸으로 옮긴다. 그다음 평소처럼 한 번 더 움직인다.',
+   steps:[{prompt:'순간이동할 내 기물을 고르세요',ok:(r,c)=>own(r,c)},{prompt:'도착할 빈칸을 고르세요',ok:(r,c)=>empty(r,c)}],
+   apply([[a,b],[c,d]]){const p=move(a,b,c,d);fx(c,d,'magic');log(`${pn(p)}이(가) ${sq(a,b)}에서 ${sq(c,d)}로 순간이동`);promoteIfEnd(c,d);stepOnMine(c,d)}},
+  {id:'frog',r:'rare',icon:'🐸',name:'폰이 되어라',kind:'target',ai:'high',desc:'적 기물 하나(킹 제외)를 폰으로 만든다.',
+   steps:[{prompt:'폰으로 만들 적 기물을 고르세요',ok:(r,c)=>enemy(r,c)&&!['K','P'].includes(at(r,c).t)&&!(at(r,c).b.shield>0)}],
+   apply([[r,c]]){const p=at(r,c);const was=NAME[p.t];p.t='P';fx(r,c,'magic');log(`${SIDE[p.c]} ${was}이(가) 폰이 되었다. 개굴.`)}},
+  {id:'draft',r:'rare',icon:'📯',name:'징병',kind:'instant',desc:'내 폰 시작 줄의 빈칸을 전부 폰으로 채운다.',
+   apply(){const r=me()==='w'?6:1;let n=0;for(let c=0;c<8;c++)if(!at(r,c)){S.board[r][c]=mk('P',me());fx(r,c,'glow');n++}log(`폰 ${n}명이 징집되었다`)}},
+  {id:'queen',r:'rare',icon:'📦',name:'퀸 택배',kind:'instant',desc:'내 첫 줄 빈칸에 퀸이 배달된다. 자리가 없으면 아무 빈칸에나 둔다.',
+   apply(){const r0=me()==='w'?7:0;let e=all((p,r)=>!p&&r===r0);if(!e.length)e=all(p=>!p);if(!e.length){log('택배 기사님이 둘 곳을 못 찾았다');return}
+     const [r,c]=rnd(e);S.board[r][c]=mk('Q',me());fx(r,c,'glow');log(`${sq(r,c)}에 퀸 택배 도착`)}},
+  {id:'walk',r:'rare',icon:'🚶',name:'왕의 산책',kind:'instant',desc:'적 킹이 갑자기 산책을 나간다. 무작위 옆 빈칸으로 한 칸 이동한다.',
+   apply(){const ks=all(p=>p&&p.c!==me()&&p.t==='K');for(const [r,c] of ks){const e=emptyAround(r,c);if(!e.length){log('적 킹이 산책을 나가려다 길이 막혔다');continue}
+     const [tr,tc]=rnd(e);move(r,c,tr,tc);log(`적 킹이 ${sq(tr,tc)}로 산책을 나갔다`);stepOnMine(tr,tc)}}},
+  {id:'nuke',r:'rare',icon:'🔴',name:'자폭 버튼',kind:'instant',desc:'누르지 말라고 써 있었다. 내 기물 하나(킹 제외)가 무작위로 폭발한다.',
+   apply(){const kings=all(p=>p&&p.c===me()&&p.t==='K');const near=(r,c)=>kings.some(([kr,kc])=>Math.abs(kr-r)<=1&&Math.abs(kc-c)<=1);
+     let c=all((p,r,cc)=>p&&p.c===me()&&p.t!=='K'&&!near(r,cc));if(!c.length)c=all(p=>p&&p.c===me()&&p.t!=='K');if(!c.length){log('자폭할 기물이 없다. 다행이다.');return}
+     const [r,cc]=rnd(c);const p=at(r,cc);p.b.shield=0;p.b.bomb=true;log(`누가 버튼을 눌렀다. ${pn(p)}...`);destroy(r,cc,'blast')}},
+
+  {id:'freeze',r:'common',icon:'❄️',name:'얼음 마법',kind:'target',ai:'high',desc:'적 기물 하나를 얼린다. 2턴 동안 움직이지 못한다.',
+   steps:[{prompt:'얼릴 적 기물을 고르세요',ok:(r,c)=>enemy(r,c)&&!(at(r,c).b.shield>0)}],
+   apply([[r,c]]){at(r,c).b.frozen=2;fx(r,c,'block');log(`${pn(at(r,c))}이(가) 꽁꽁 얼었다`)}},
+  {id:'shield',r:'common',icon:'🛡️',name:'철벽 방패',kind:'target',ai:'king',desc:'내 기물 하나에 방패를 준다. 상대의 다음 2턴 동안 무엇에도 잡히지 않는다.',
+   steps:[{prompt:'방패를 줄 내 기물을 고르세요',ok:(r,c)=>own(r,c)}],
+   apply([[r,c]]){at(r,c).b.shield=3;fx(r,c,'block');log(`${pn(at(r,c))}이(가) 방패를 들었다`)}},
+  {id:'ghost',r:'common',icon:'👻',name:'유령화',kind:'target',ai:'high',desc:'내 기물 하나가 유령이 된다. 다른 기물을 통과해서 미끄러진다.',
+   steps:[{prompt:'유령으로 만들 내 기물을 고르세요 (퀸·룩·비숍·폰·드래곤)',ok:(r,c)=>own(r,c)&&'QRBPD'.includes(at(r,c).t)&&!at(r,c).b.ghost}],
+   apply([[r,c]]){at(r,c).b.ghost=true;fx(r,c,'magic');log(`${pn(at(r,c))}이(가) 반투명해졌다`)}},
+  {id:'horse',r:'common',icon:'🐴',name:'말 타기',kind:'target',ai:'high',desc:'내 기물 하나가 말에 올라탄다. 원래 움직임에 나이트 움직임이 추가된다.',
+   steps:[{prompt:'말에 태울 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&!'ND'.includes(at(r,c).t)&&!at(r,c).b.knight}],
+   apply([[r,c]]){at(r,c).b.knight=true;fx(r,c,'glow');log(`${pn(at(r,c))}이(가) 말에 올라탔다. 히이잉.`)}},
+  {id:'promo',r:'common',icon:'👑',name:'벼락 승진',kind:'target',ai:'random',desc:'내 폰 하나가 즉시 퀸이 된다.',
+   steps:[{prompt:'승진시킬 내 폰을 고르세요',ok:(r,c)=>own(r,c)&&at(r,c).t==='P'}],
+   apply([[r,c]]){at(r,c).t='Q';fx(r,c,'glow');log(`${sq(r,c)}의 폰이 하루아침에 퀸이 되었다`)}},
+  {id:'march',r:'common',icon:'🥁',name:'폰 대행진',kind:'instant',desc:'내 모든 폰이 앞이 비어 있으면 한 칸 전진한다.',
+   apply(){const d=me()==='w'?-1:1;const rows=me()==='w'?[0,1,2,3,4,5,6,7]:[7,6,5,4,3,2,1,0];let n=0;
+     for(const r of rows)for(let c=0;c<8;c++){const p=at(r,c);if(p&&p.c===me()&&p.t==='P'&&inB(r+d,c)&&!at(r+d,c)){move(r,c,r+d,c);n++;promoteIfEnd(r+d,c);stepOnMine(r+d,c)}}
+     log(`둥둥둥! 폰 ${n}명이 한 칸씩 전진`)}},
+  {id:'mines',r:'common',icon:'⚠️',name:'지뢰 매설',kind:'instant',desc:'판 가운데 빈칸 3곳에 지뢰를 묻는다. 밟으면 터진다. 킹은 발가락만 다쳐서 2턴 동안 못 움직인다.',
+   apply(){const c=shuffle(all((p,r,cc)=>!p&&r>=2&&r<=5&&!S.mines.some(([a,b])=>a===r&&b===cc))).slice(0,3);S.mines.push(...c);log(`지뢰 ${c.length}개를 묻었다. 위치는 다 보인다. 형식상의 은밀함.`)}},
+
+  {id:'soul',r:'legend',icon:'🎭',name:'영혼 체인지',kind:'instant',desc:'판 위 모든 기물의 진영이 뒤바뀐다. 이제 상대 군대가 내 군대다. 폰은 이제 거꾸로 걷는다.',
+   apply(){for(const [r,c] of all(p=>!!p)){const p=at(r,c);p.c=foe(p.c);fx(r,c,'magic')}S.last=null;log('모든 기물의 영혼이 뒤바뀌었다. 누가 누구 편이지?')}},
+  {id:'gravity',r:'legend',icon:'🍎',name:'중력 발생',kind:'instant',desc:'판이 상대 쪽으로 기울어진다. 모든 기물이 상대 진영 끝까지 우르르 떨어져 쌓인다.',
+   apply(){const floor=me()==='w'?0:7,d=me()==='w'?1:-1;
+     for(let c=0;c<8;c++){const ps=[];for(let i=0;i<8;i++){const r=floor+d*i;if(at(r,c)){ps.push(at(r,c));S.board[r][c]=null}}
+       ps.forEach((p,i)=>{const r=floor+d*i;S.board[r][c]=p;p.moved=true;fx(r,c,'hit')})}
+     S.mines=S.mines.filter(([r,c])=>!at(r,c));S.last=null;log('사과가 떨어지듯 모든 기물이 우르르 떨어졌다')}},
+  {id:'slot',r:'legend',icon:'🎰',name:'슬롯머신',kind:'instant',desc:'레버를 당긴다. 즉시 발동 카드 3장이 연달아 터진다. 뭐가 나올지는 기계도 모른다.',
+   apply(){const pool=CARDS.filter(c=>c.kind==='instant'&&!['slot','copy'].includes(c.id));
+     for(let i=0;i<3;i++){const c=rnd(pool);log(`🎰 ${i+1}번째 칸: 「${c.name}」`);c.apply();
+       if(!all(p=>p&&p.t==='K'&&p.c==='w').length||!all(p=>p&&p.t==='K'&&p.c==='b').length)break}}},
+
+  {id:'copy',r:'rare',icon:'🪞',name:'따라쟁이',kind:'instant',desc:'상대가 직전에 뽑은 카드로 둔갑한다. 꽝을 따라 할 수도 있다.',
+   apply(){const id=(S.lastDrawn||{})[foe(me())];if(!id||id==='copy'){log('따라 할 카드가 없다. 거울만 멍하니 본다.');return}
+     S.redirect=id;(S.lastDrawn||(S.lastDrawn={}))[me()]=id}},
+  {id:'chicken',r:'rare',icon:'🐔',name:'치킨 저주',kind:'instant',desc:'적의 퀸과 드래곤이 전부 닭이 된다. 닭은 아무 방향으로 한 칸 걷는다. 꼬끼오.',
+   apply(){const t=all(p=>p&&p.c!==me()&&(p.t==='Q'||p.t==='D'));if(!t.length){log('닭으로 만들 퀸이 없다. 아쉽다.');return}
+     for(const [r,c] of t){at(r,c).t='C';fx(r,c,'magic')}log(`적 퀸 ${t.length}명이 닭이 되었다. 꼬끼오.`)}},
+  {id:'bday',r:'rare',icon:'🎂',name:'생일 파티',kind:'instant',desc:'모두의 생일이다. 양쪽 기물이 전부 한 단계 성장한다. 폰→나이트→비숍→룩→퀸→드래곤.',
+   apply(){const up={P:'N',N:'B',B:'R',R:'Q',Q:'D',C:'N'};for(const [r,c] of all(p=>p&&up[p.t])){at(r,c).t=up[at(r,c).t];fx(r,c,'glow')}log('🎉 생일 축하합니다~ 모두 한 단계 성장했다')}},
+  {id:'old',r:'rare',icon:'👴',name:'세월의 흐름',kind:'instant',desc:'양쪽 기물이 전부 한 단계 늙는다. 드래곤→퀸→룩→비숍→나이트→폰.',
+   apply(){const down={D:'Q',Q:'R',R:'B',B:'N',N:'P'};for(const [r,c] of all(p=>p&&down[p.t])){at(r,c).t=down[at(r,c).t];fx(r,c,'poof')}log('세월 앞에 장사 없다. 모두 한 단계 늙었다')}},
+  {id:'usurp',r:'rare',icon:'⚜️',name:'왕위 찬탈',kind:'target',ai:'skip',desc:'내 기물 하나를 골라 킹과 직업을 맞바꾼다. 어제의 폰이 오늘의 왕이다.',
+   steps:[{prompt:'새 왕이 될 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&at(r,c).t!=='K'&&all(p=>p&&p.c===me()&&p.t==='K').length>0}],
+   apply([[r,c]]){const [kr,kc]=all(p=>p&&p.c===me()&&p.t==='K')[0];const p=at(r,c),k=at(kr,kc);k.t=p.t;p.t='K';fx(r,c,'glow');fx(kr,kc,'poof');
+     log(`${sq(r,c)}의 기물이 왕위를 찬탈했다. 전 킹은 ${NAME[k.t]}(으)로 강등`)}},
+  {id:'spin',r:'rare',icon:'🌪️',name:'회오리',kind:'instant',desc:'회오리가 무작위 가로줄 하나를 휩쓸어 그 줄의 기물들을 옆으로 빙글빙글 밀어낸다.',
+   apply(){const rows=[0,1,2,3,4,5,6,7].filter(r=>S.board[r].some(Boolean));if(!rows.length)return;
+     const r=rnd(rows),k=1+Math.floor(Math.random()*7),row=S.board[r];S.board[r]=row.map((_,c)=>row[(c-k+8)%8]);
+     for(let c=0;c<8;c++)fx(r,c,'magic');S.last=null;log(`🌪️ ${8-r}번 가로줄이 ${k}칸 빙글 돌았다`)}},
+  {id:'snipe',r:'rare',icon:'🎯',name:'저격',kind:'target',ai:'high',desc:'멀리서 날아온 화살 한 발. 적 기물 하나(킹 제외)를 그 자리에서 없앤다.',
+   steps:[{prompt:'저격할 적 기물을 고르세요',ok:(r,c)=>enemy(r,c)&&at(r,c).t!=='K'&&!(at(r,c).b.shield>0)}],
+   apply([[r,c]]){log('어디선가 화살이 날아왔다');destroy(r,c,'snipe')}},
+  {id:'necro',r:'rare',icon:'🪦',name:'네크로맨서',kind:'instant',desc:'무덤에서 내 기물 하나가 기어 나온다. 이번 판에서 죽은 내 기물 중 무작위로 부활한다.',
+   apply(){const g=(S.grave||[]).map((x,i)=>[x,i]).filter(([x])=>x.c===me());if(!g.length){log('무덤이 비어 있다. 아직 아무도 안 죽었다.');return}
+     const [x,i]=rnd(g),r0=me()==='w'?7:0;let e=all((p,r)=>!p&&r===r0);if(!e.length)e=all(p=>!p);if(!e.length)return;
+     const [r,c]=rnd(e);S.grave.splice(i,1);S.board[r][c]=mk(x.t,me());fx(r,c,'glow');log(`🪦 ${NAME[x.t]}이(가) ${sq(r,c)}에서 무덤을 박차고 나왔다`)}},
+  {id:'love',r:'rare',icon:'💌',name:'사랑의 도피',kind:'target',ai:['low','high'],desc:'내 기물 하나와 적 기물 하나가 사랑에 빠져 함께 판을 떠난다. 킹은 사랑보다 나라가 먼저다.',
+   steps:[{prompt:'사랑에 빠질 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&at(r,c).t!=='K'},{prompt:'상대가 될 적 기물을 고르세요',ok:(r,c)=>enemy(r,c)&&at(r,c).t!=='K'&&!(at(r,c).b.shield>0)}],
+   apply([[a,b],[c,d]]){const p=at(a,b),q=at(c,d);S.board[a][b]=null;S.board[c][d]=null;fx(a,b,'glow');fx(c,d,'glow');log(`💕 ${pn(p)}와(과) ${pn(q)}이(가) 손잡고 판을 떠났다`)}},
+
+  {id:'snail',r:'common',icon:'🐌',name:'달팽이 저주',kind:'target',ai:'high',desc:'적 기물 하나가 달팽이가 된다. 퀸이든 룩이든 이제 한 칸씩만 미끄러진다.',
+   steps:[{prompt:'달팽이로 만들 적 기물을 고르세요',ok:(r,c)=>enemy(r,c)&&!(at(r,c).b.shield>0)&&!at(r,c).b.slow}],
+   apply([[r,c]]){at(r,c).b.slow=true;fx(r,c,'magic');log(`${pn(at(r,c))}이(가) 느릿느릿해졌다`)}},
+  {id:'invis',r:'common',icon:'🧥',name:'투명 망토',kind:'target',ai:'high',desc:'내 기물 하나가 투명해진다. 상대도 못 보고 나도 못 본다. 어디 뒀는지 잘 기억하자.',
+   steps:[{prompt:'투명하게 만들 내 기물을 고르세요',ok:(r,c)=>own(r,c)&&!at(r,c).b.invis}],
+   apply([[r,c]]){at(r,c).b.invis=true;fx(r,c,'poof');log(`${SIDE[me()]}의 기물 하나가 사라졌다... 처럼 보인다`)}},
+  {id:'nap',r:'common',icon:'💤',name:'낮잠 시간',kind:'instant',desc:'양쪽 기물이 모두 잠든다. 이번 내 턴과 상대의 다음 턴에는 킹만 깨어 있다.',
+   apply(){for(const [r,c] of all(p=>p&&p.t!=='K')){const b=at(r,c).b;b.frozen=Math.max(b.frozen||0,1)}log('💤 쿨쿨... 킹 빼고 모두 잠들었다')}},
+  {id:'banana',r:'common',icon:'🍌',name:'바나나 껍질',kind:'target',ai:'king',desc:'적 기물 하나가 바나나를 밟고 무작위 방향으로 막힐 때까지 쭉 미끄러진다. 킹도 미끄러진다.',
+   steps:[{prompt:'바나나를 밟을 적 기물을 고르세요',ok:(r,c)=>enemy(r,c)&&!(at(r,c).b.shield>0)}],
+   apply([[r,c]]){const p=at(r,c),dirs=ALL8.filter(([dr,dc])=>inB(r+dr,c+dc)&&!at(r+dr,c+dc));
+     if(!dirs.length){log(`${pn(p)}은(는) 바나나를 밟았지만 미끄러질 곳이 없다`);return}
+     const [dr,dc]=rnd(dirs);let rr=r,cc=c;while(inB(rr+dr,cc+dc)&&!at(rr+dr,cc+dc)){rr+=dr;cc+=dc}
+     move(r,c,rr,cc);fx(rr,cc,'hit');log(`🍌 ${pn(p)}이(가) ${sq(r,c)}에서 ${sq(rr,cc)}까지 쭉 미끄러졌다`);stepOnMine(rr,cc)}},
+
+  {id:'potato',r:'dud',icon:'🥔',name:'꽝',kind:'instant',desc:'감자 그림이 그려져 있다. 아무 일도 일어나지 않는다.',apply(){log('감자다. 그냥 감자.')}},
+  {id:'rules',r:'dud',icon:'📖',name:'체스 공식 규칙서',kind:'instant',desc:'국제 체스 연맹 규칙이 빼곡히 적혀 있다. 아무도 읽지 않는다. 아무 일도 없다.',apply(){log('규칙서를 펼쳤다가 바로 덮었다')}},
+];
+const CARD=Object.fromEntries(CARDS.map(c=>[c.id,c]));
+function drawCard(){const tot=CARDS.reduce((s,c)=>s+(c.w||RAR[c.r].w),0);let x=Math.random()*tot;for(const c of CARDS){x-=(c.w||RAR[c.r].w);if(x<=0)return c.id}return CARDS[0].id}
+
+// ---------- movement ----------
+function movesOf(B,r,c){
+  const p=B[r][c]; if(!p||p.b.frozen>0) return [];
+  const out=[],seen=new Set();
+  const ok=(rr,cc)=>{if(!inB(rr,cc))return false;const q=B[rr][cc];return !q||(q.c!==p.c&&!(q.b.shield>0))};
+  const add=(rr,cc)=>{const k=rr*8+cc;if(!seen.has(k)){seen.add(k);out.push([rr,cc])}};
+  const slide=dirs=>{for(const [dr,dc] of dirs){let rr=r+dr,cc=c+dc;while(inB(rr,cc)){const q=B[rr][cc];
+    if(!q)add(rr,cc);else{if(q.c!==p.c&&!(q.b.shield>0))add(rr,cc);if(!p.b.ghost)break}if(p.b.slow)break;rr+=dr;cc+=dc}}};
+  const step=dirs=>{for(const [dr,dc] of dirs)if(ok(r+dr,c+dc))add(r+dr,c+dc)};
+  const t=p.t;
+  if(t==='Q'||t==='D'||p.b.sword) slide(ALL8);
+  if(t==='R') slide(ORTH);
+  if(t==='B') slide(DIAG);
+  if(t==='N'||t==='D'||p.b.knight) step(KN);
+  if(t==='C') step(ALL8);
+  if(t==='K'){step(ALL8);
+    if(!p.moved&&c===4&&r===(p.c==='w'?7:0)){
+      for(const [rc,tc,between] of [[7,6,[5,6]],[0,2,[1,2,3]]]){const rook=B[r][rc];
+        if(rook&&rook.t==='R'&&rook.c===p.c&&!rook.moved&&between.every(x=>!B[r][x]))add(r,tc)}}}
+  if(t==='P'){const d=p.c==='w'?-1:1,start=p.c==='w'?6:1;
+    if(inB(r+d,c)&&!B[r+d][c]){add(r+d,c);if(r===start&&inB(r+2*d,c)&&!B[r+2*d][c])add(r+2*d,c)}
+    else if(p.b.ghost&&r===start&&inB(r+2*d,c)&&!B[r+2*d][c])add(r+2*d,c);
+    for(const dc of [-1,1]){const rr=r+d,cc=c+dc;if(inB(rr,cc)&&B[rr][cc]&&ok(rr,cc))add(rr,cc)}}
+  return out;
+}
+function kingsUnderFire(B,col){
+  const hit=new Set();
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=B[r][c];if(p&&p.c!==col)for(const [tr,tc] of movesOf(B,r,c)){const q=B[tr][tc];if(q&&q.c===col&&q.t==='K')hit.add(tr*8+tc)}}
+  return hit;
+}
+
+// ---------- turn flow ----------
+function newGame(mode){
+  uid=1;
+  const board=Array.from({length:8},()=>Array(8).fill(null)),back='RNBQKBNR';
+  for(let i=0;i<8;i++){board[0][i]=mk(back[i],'b');board[1][i]=mk('P','b');board[6][i]=mk('P','w');board[7][i]=mk(back[i],'w')}
+  S={board,turn:'w',turnNo:1,phase:'reveal',card:null,drawId:0,stepIdx:0,picks:[],movesLeft:1,sel:null,mines:[],fx:[],winner:null,mode,log:[],last:null,grave:[],lastDrawn:{}};
+  log('게임 시작! 규칙은 형식상 존재합니다.','sys');
+  startTurn();
+}
+function startTurn(){
+  S.phase='reveal';S.movesLeft=1;S.sel=null;S.picks=[];S.stepIdx=0;
+  S.card=drawCard();S.drawId++;(S.lastDrawn||(S.lastDrawn={}))[S.turn]=S.card;
+  log(`「${CARD[S.card].name}」 카드를 뽑았다`);
+  render();
+  if(isAI()) aiCard();
+}
+function isAI(){return S.mode==='ai'&&S.turn==='b'&&S.phase!=='over'}
+function activate(){
+  const card=CARD[S.card];
+  if(card.kind==='instant'){card.apply();
+    if(S.redirect){S.card=S.redirect;delete S.redirect;S.drawId++;S.phase='reveal';log(`카드가 「${CARD[S.card].name}」(으)로 둔갑했다`);render();if(isAI())aiCard();return}
+    afterCard();return}
+  S.phase='target';S.stepIdx=0;S.picks=[];
+  if(!candidates().length){log(`대상이 없어 「${card.name}」 불발`);afterCard();return}
+  render();
+}
+function candidates(){const st=CARD[S.card].steps[S.stepIdx];return all((p,r,c)=>st.ok(r,c,S.picks))}
+function discard(){log(`「${CARD[S.card].name}」 카드를 버렸다`);afterCard()}
+function afterCard(){
+  if(checkWin())return;
+  S.phase='move';S.sel=null;render();
+  if(isAI()) aiMove();
+}
+function endTurn(){
+  for(const [r,c] of all(p=>p&&p.c===S.turn)){const b=at(r,c).b;if(b.frozen>0)b.frozen--;if(b.shield>0)b.shield--}
+  S.turn=foe(S.turn);if(S.turn==='w')S.turnNo++;
+  startTurn();
+}
+function checkWin(){
+  const wk=all(p=>p&&p.t==='K'&&p.c==='w').length,bk=all(p=>p&&p.t==='K'&&p.c==='b').length;
+  if(wk&&bk)return false;
+  S.phase='over';S.winner=!wk&&!bk?'draw':!wk?'b':'w';
+  log(S.winner==='draw'?'양쪽 킹이 동시에 사라졌다. 무승부!':`${SIDE[S.winner]} 승리!`,'sys');
+  render();return true;
+}
+function doMove(fr,fc,tr,tc){
+  const p=at(fr,fc),tgt=at(tr,tc);let captured=false,alive=true;
+  S.board[fr][fc]=null;
+  if(p.t==='K'&&tr===fr&&Math.abs(tc-fc)===2){const rc=tc>fc?7:0,nc=tc>fc?5:3,rook=at(fr,rc);
+    if(rook){S.board[fr][nc]=rook;S.board[fr][rc]=null;rook.moved=true;log('캐슬링! 형식상의 규칙도 가끔은 지킨다.')}}
+  if(tgt){const hadBomb=tgt.b.bomb;log(`${pn(p)} ${sq(fr,fc)}→${sq(tr,tc)}, ${pn(tgt)}을(를) 잡았다`);destroy(tr,tc,'capture');captured=true;
+    if(hadBomb&&!(p.b.shield>0)){alive=false;log(`${pn(p)}도 폭발에 휘말렸다!`);if(p.t==='K')log(`💀 ${SIDE[p.c]} 킹이 쓰러졌다!`,'sys');if(p.b.bomb){log(`💣 연쇄 폭발!`);explode(tr,tc)}}}
+  else log(`${pn(p)} ${sq(fr,fc)}→${sq(tr,tc)}`);
+  if(alive){
+    S.board[tr][tc]=p;p.moved=true;
+    promoteIfEnd(tr,tc);
+    stepOnMine(tr,tc);
+    if(at(tr,tc)===p&&p.b.sword){let n=0;for(const [dr,dc] of ALL8){const rr=tr+dr,cc=tc+dc;if(inB(rr,cc)){const q=at(rr,cc);if(q&&q.c!==p.c){if(destroy(rr,cc,'slash'))n++}}}
+      if(n)log(`🗡️ 소드 마스터의 검기가 적 ${n}명을 베었다!`)}
+    if(captured&&p.b.berserk&&at(tr,tc)===p){S.movesLeft++;log(`🔥 광전사 ${NAME[p.t]}, 한 번 더!`)}
+  }
+  S.last={fr,fc,tr,tc};S.movesLeft--;S.sel=null;
+  if(checkWin())return;
+  if(S.movesLeft<=0)endTurn();
+  else{render();if(isAI())aiMove()}
+}
+
+// ---------- input ----------
+function onSquare(r,c){
+  if(isAI())return;
+  if(S.phase==='target'){
+    const st=CARD[S.card].steps[S.stepIdx];if(!st.ok(r,c,S.picks))return;
+    S.picks.push([r,c]);S.stepIdx++;
+    if(S.stepIdx>=CARD[S.card].steps.length){CARD[S.card].apply(S.picks);S.picks=[];afterCard();return}
+    if(!candidates().length){log(`대상이 없어 「${CARD[S.card].name}」 불발`);afterCard();return}
+    render();return;
+  }
+  if(S.phase!=='move')return;
+  if(S.sel){const [sr,sc]=S.sel;if(movesOf(S.board,sr,sc).some(([a,b])=>a===r&&b===c)){doMove(sr,sc,r,c);return}}
+  S.sel=own(r,c)&&!(S.sel&&S.sel[0]===r&&S.sel[1]===c)?[r,c]:null;
+  render();
+}
+
+// ---------- computer ----------
+function aiCard(){
+  const g=S;
+  setTimeout(()=>{if(S!==g||!isAI()||S.phase!=='reveal')return;
+    const card=CARD[S.card];
+    if(card.kind==='instant'){activate();return}
+    if(card.ai==='skip'){discard();return}
+    const picks=[];
+    for(const [i,st] of card.steps.entries()){
+      const c=all((p,r,cc)=>st.ok(r,cc,picks));
+      if(!c.length){log(`대상이 없어 「${card.name}」 불발`);afterCard();return}
+      const pref=Array.isArray(card.ai)?card.ai[i]:card.ai;let choice=rnd(c);
+      const v=([r,cc])=>{const p=at(r,cc);return p?(p.t==='K'?(pref==='king'?2000:.5):VAL[p.t]):0};
+      if(pref==='high'||pref==='king'){c.sort((a,b)=>v(b)-v(a));choice=c[0]}
+      if(pref==='low'){c.sort((a,b)=>v(a)-v(b));choice=c[0]}
+      picks.push(choice);
+    }
+    log(`컴퓨터가 「${card.name}」 사용`);card.apply(picks);afterCard();
+  },1300);
+}
+function aiScore(fr,fc,tr,tc){
+  const B=S.board,p=B[fr][fc],t=B[tr][tc];
+  let g=t?VAL[t.t]:0;
+  if(t&&t.b.bomb&&!(p.b.shield>0))g-=VAL[p.t]*.9;
+  if(p.b.sword)for(const [dr,dc] of ALL8){const rr=tr+dr,cc=tc+dc;if(inB(rr,cc)){const q=B[rr][cc];if(q&&q.c!==p.c&&!(q.b.shield>0)&&!(rr===tr&&cc===tc))g+=VAL[q.t]}}
+  if(p.t==='P'&&tr===lastRow(p.c))g+=8;
+  if(S.mines.some(([a,b])=>a===tr&&b===tc))g-=p.t==='K'?3:VAL[p.t];
+  const nb=B.map(row=>row.slice());nb[fr][fc]=null;nb[tr][tc]=p;
+  let risk=0;
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const e=nb[r][c];if(e&&e.c!==p.c)for(const [a,b] of movesOf(nb,r,c)){const q=nb[a][b];if(q&&q.c===p.c)risk=Math.max(risk,VAL[q.t])}}
+  return g-risk*.9+Math.random()*.6;
+}
+function aiMove(){
+  const g=S;
+  setTimeout(()=>{if(S!==g||!isAI()||S.phase!=='move')return;
+    let best=null,bs=-Infinity;
+    for(const [r,c] of all(p=>p&&p.c==='b'))for(const [tr,tc] of movesOf(S.board,r,c)){const s=aiScore(r,c,tr,tc);if(s>bs){bs=s;best=[r,c,tr,tc]}}
+    if(!best){log('컴퓨터가 움직일 수 없어 턴을 넘겼다');endTurn();return}
+    doMove(...best);
+  },800);
+}
+
+// ---------- render ----------
+const $=id=>document.getElementById(id);
+let shownDraw=-1;
+function badges(p){
+  const b=p.b,o=[];
+  if(b.sword)o.push('🗡️');if(b.shield>0)o.push('🛡️<b>'+b.shield+'</b>');if(b.frozen>0)o.push('❄️<b>'+b.frozen+'</b>');
+  if(b.bomb)o.push('💣');if(b.ghost)o.push('👻');if(b.knight)o.push('🐴');if(b.berserk)o.push('🔥');if(b.slow)o.push('🐌');
+  return o.length?`<span class="badges">${o.join('')}</span>`:'';
+}
+function describe(p){
+  const b=p.b,o=[];
+  if(b.sword)o.push('소드 마스터: 퀸처럼 이동, 이동 후 주변 적 베기');
+  if(b.shield>0)o.push(`방패 ${b.shield}`);if(b.frozen>0)o.push(`얼음 ${b.frozen}턴`);
+  if(b.bomb)o.push('폭탄 조끼');if(b.ghost)o.push('유령: 기물 통과');if(b.knight)o.push('말 탑승: 나이트 이동 추가');if(b.berserk)o.push('광전사: 잡으면 한 번 더');
+  if(b.slow)o.push('달팽이: 한 칸씩만 미끄러짐');if(b.invis)o.push('투명 망토: 아무도 못 봄');
+  if(p.t==='D')o.push('퀸 + 나이트 이동');if(p.t==='C')o.push('닭: 아무 방향으로 한 칸');
+  return o.length?o.join(' · '):'특수 능력 없음. 평범한 게 죄는 아니다.';
+}
+function render(){
+  const now=Date.now();S.fx=S.fx.filter(f=>now-f.t<700);
+  let mv=new Set(),cand=new Set(),picked=new Set();
+  if(S.phase==='move'&&S.sel)for(const [r,c] of movesOf(S.board,...S.sel))mv.add(r*8+c);
+  if(S.phase==='target'&&!isAI()){for(const [r,c] of candidates())cand.add(r*8+c);for(const [r,c] of S.picks)picked.add(r*8+c)}
+  const check=S.phase==='over'?new Set():kingsUnderFire(S.board,S.turn);
+  const mines=new Set(S.mines.map(([r,c])=>r*8+c));
+  let h='';
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const k=r*8+c,p=S.board[r][c],cls=['sq',(r+c)%2?'d':'l'];
+    if(S.last&&((S.last.fr===r&&S.last.fc===c)||(S.last.tr===r&&S.last.tc===c)))cls.push('last');
+    if(S.sel&&S.sel[0]===r&&S.sel[1]===c)cls.push('sel');
+    if(mv.has(k))cls.push(p?'cap':'mv');
+    if(cand.has(k))cls.push('cand');if(picked.has(k))cls.push('picked');
+    if(check.has(k))cls.push('check');
+    if(p&&p.b.frozen>0)cls.push('fz');
+    let inner='';
+    if(c===0)inner+=`<span class="coord rk">${8-r}</span>`;
+    if(r===7)inner+=`<span class="coord fl">${FILES[c]}</span>`;
+    if(mines.has(k))inner+='<span class="mine"></span>';
+    if(p){const emo=EMO.has(p.t),pc=['pc',p.c,p.t];if(emo)pc.push('emo');if(p.b.invis)pc.push('invis');if(p.b.ghost)pc.push('ghost');if(p.b.sword)pc.push('sword');if(p.b.frozen>0)pc.push('frozen');
+      inner+=`<span class="${pc.join(' ')}">${GLYPH[p.t]}${emo?'':'︎'}</span>${p.b.invis?'':badges(p)}`}
+    for(const f of S.fx)if(f.r===r&&f.c===c)inner+=`<span class="fx ${f.k}"></span>`;
+    const label=`${sq(r,c)}${p?' '+pn(p):''}${mines.has(k)?' 지뢰':''}`;
+    h+=`<button class="${cls.join(' ')}" data-r="${r}" data-c="${c}" aria-label="${label}">${inner}</button>`;
+  }
+  $('board').innerHTML=h;
+  if(S.fx.length)setTimeout(()=>{if(S.fx.some(f=>Date.now()-f.t>=700))render()},720);
+
+  const ov=$('over');
+  if(S.phase==='over'){ov.hidden=false;
+    ov.innerHTML=`<div><strong>${S.winner==='draw'?'무승부':SIDE[S.winner]+' 승리!'}</strong><p>${S.winner==='draw'?'둘 다 킹을 잃었다. 체스 역사에 남을 판이다.':'상대 킹이 더 이상 판 위에 없다. 형식상 규칙에 따라 승리.'}</p><button class="btn go" data-act="new">한 판 더</button></div>`}
+  else ov.hidden=true;
+
+  const ai=S.mode==='ai';
+  const who=ai?(S.turn==='w'?'나 (백)':'컴퓨터 (흑)'):`${SIDE[S.turn]}의 차례`;
+  $('turn').innerHTML=`<span class="dot ${S.turn}"></span><span class="who">${who}</span><span class="no">TURN ${S.turnNo}</span>${check.size?'<span class="alert">킹이 노려지고 있다!</span>':''}`;
+
+  if(shownDraw!==S.drawId){shownDraw=S.drawId;const cd=CARD[S.card];
+    $('slot').innerHTML=`<article class="card draw r-${cd.r}"><div class="band"><span>${RAR[cd.r].label}</span><span>${SIDE[S.turn]}의 카드</span></div><div class="art" aria-hidden="true">${cd.icon}</div><div class="body"><h2>${cd.name}</h2><p>${cd.desc}</p><span class="kind">${cd.kind==='instant'?'즉시 발동 · 거부 불가':'대상 지정 · 버릴 수 있음'}</span></div></article>`}
+
+  const card=CARD[S.card];let a='';
+  if(S.phase==='over')a=`<button class="btn go" data-act="new">새 게임</button>`;
+  else if(isAI())a=`<span class="prompt">${S.phase==='reveal'?'컴퓨터가 카드를 읽는 중…':S.phase==='move'?'컴퓨터가 수를 고르는 중…':'…'}</span>`;
+  else if(S.phase==='reveal')a=card.kind==='instant'?`<button class="btn go" data-act="use">발동!</button><span class="prompt"><small>즉시 발동 카드는 거부할 수 없습니다</small></span>`:`<button class="btn go" data-act="use">사용하기</button><button class="btn ghost" data-act="discard">버리기</button>`;
+  else if(S.phase==='target')a=`<span class="prompt">${card.steps[S.stepIdx].prompt}<small>노랗게 깜빡이는 칸을 누르세요</small></span><button class="btn ghost" data-act="discard">취소하고 버리기</button>`;
+  else if(S.phase==='move')a=`<span class="prompt">말을 움직이세요${S.movesLeft>1?` · 남은 이동 ${S.movesLeft}번`:''}<small>움직일 수가 없으면 턴을 넘기세요</small></span><button class="btn ghost" data-act="pass">턴 넘기기</button>`;
+  $('actions').innerHTML=a;
+
+  if(S.sel&&at(...S.sel)){const p=at(...S.sel);$('info').innerHTML=`<strong>${pn(p)}</strong> · ${sq(...S.sel)}<br>${describe(p)}`}
+  else $('info').innerHTML='기물을 누르면 능력과 상태를 볼 수 있습니다. 기물 오른쪽 위 아이콘이 붙은 능력입니다.';
+
+  $('log').innerHTML=S.log.map(l=>`<li class="${l.c}"><span class="t">${l.n}턴</span><span class="m">${l.msg}</span></li>`).join('');
+  $('m-ai').setAttribute('aria-pressed',S.mode==='ai');$('m-pvp').setAttribute('aria-pressed',S.mode==='pvp');
+}
+
+$('board').addEventListener('click',e=>{const b=e.target.closest('.sq');if(b)onSquare(+b.dataset.r,+b.dataset.c)});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+  if(a==='new')newGame(S.mode);else if(isAI())return;else if(a==='use'&&S.phase==='reveal')activate();else if(a==='discard'&&(S.phase==='reveal'||S.phase==='target'))discard();else if(a==='pass'&&S.phase==='move'){log('턴을 넘겼다');endTurn()}});
+$('m-ai').onclick=()=>newGame('ai');$('m-pvp').onclick=()=>newGame('pvp');$('m-new').onclick=()=>newGame(S.mode);
+
+$('codexSum').textContent=`카드 도감 (${CARDS.length}장)`;
+$('codex').innerHTML=['legend','rare','common','dud'].flatMap(r=>CARDS.filter(c=>c.r===r).map(c=>`<div class="mini r-${c.r}"><b>${c.icon} ${c.name}</b><span>${c.desc}</span></div>`)).join('');
+
+function start(data){
+  if(data&&data.S){S=data.S;uid=data.uid||500;shownDraw=-1;render();
+    if(isAI()){if(S.phase==='reveal')aiCard();else if(S.phase==='move')aiMove()}}
+  else newGame('ai');
+}
+window.claude?.hot?.snapshot?.(()=>({S,uid}));
+window.claude?.hot?.ready?window.claude.hot.ready(start):start(window.claude?.hot?.data??{});
+</script>
